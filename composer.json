@@ -1,0 +1,20 @@
+{
+    "name": "b3none/emtapi",
+    "description": "East Midlands Trains PHP API",
+    "type": "library",
+    "authors": [
+        {
+            "name": "B3none",
+            "email": "ablackham2000@gmail.com"
+        }
+    ],
+    "require": {
+        "guzzlehttp/guzzle": "^6.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "B3none\\emtapi\\": "src",
+            "B3none\\emtapi\\Tests\\": "tests"
+        }
+    }
+}
