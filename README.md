@@ -1,2 +1,2 @@
 # emtapi
-East Midlands Trains API
+East Midlands Trains API Interface written in PHP.
