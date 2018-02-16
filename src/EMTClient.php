@@ -13,12 +13,18 @@ class EMTClient
     const DEFAULT_SESSION_ID = "hoetyz55hfy5t1554cepm32i";
 
     /**
+     * @var bool
+     */
+    protected $throwException;
+
+    /**
      * @var Client
      */
     protected $client;
 
-    public function __construct()
+    public function __construct(bool $throwException = false)
     {
+        $this->throwException = $throwException;
         $this->client = new Client(['cookies' => true]);
     }
 
@@ -110,9 +116,23 @@ class EMTClient
     protected function formatAndValidateResponse(array $response) : array
     {
         if ($response['originnotfound']) {
-            throw new \Exception("The origin station was not found.");
+            if ($this->throwException) {
+                throw new \Exception('The origin station was not found.');
+            } else {
+                return ['errorMessage' => 'The origin station was not found.'];
+            }
         } else if ($response['destnotfound']) {
-            throw new \Exception("The destination station was not found.");
+            if ($this->throwException) {
+                throw new \Exception('The destination station was not found.');
+            } else {
+                return ['errorMessage' => 'The destination station was not found.'];
+            }
+        } else if (!$response['buses'] && !$response['trains']) {
+            if ($this->throwException) {
+                throw new \Exception('There are no trains or buses.');
+            } else {
+                return ['errorMessage' => 'There are no trains or buses.'];
+            }
         }
 
         foreach ($response as $paramKey => $responseParam) {
