@@ -10,16 +10,34 @@ class EMTClient
     const EMT_BASE_URL = "https://www.eastmidlandstrains.co.uk";
     const EMT_API_ENDPOINT = "/services/LiveTrainInfoService.svc/GetLiveBoardJson";
 
-    const DEFAULT_SESSION_ID = "";
+    const DEFAULT_SESSION_ID = "hoetyz55hfy5t1554cepm32i";
 
     /**
+     * @var Client
+     */
+    protected $client;
+
+    public function __construct()
+    {
+        $this->client = new Client(['cookies' => true]);
+    }
+
+    /**
+     * Get the live details on a journey.
+     *
+     * Please note:
+     * - You must make sure that the station names you input are correct.
+     *
      * @param string $startLocation
      * @param string $endLocation
-     * @return mixed
+     * @return array
+     * @throws \Exception
      */
-    public function getJourneys(string $startLocation, string $endLocation)
+    public function getJourneys(string $startLocation, string $endLocation) : array
     {
-        $guzzleClient = new Client();
+        if ($startLocation == $endLocation) {
+            throw new \Exception("The start and end station must not be the same.");
+        }
 
         $jsonData = json_encode([
             'request' => [
@@ -45,13 +63,10 @@ class EMTClient
             'Cookie' => 'EMT_cookies=True; ASP.NET_SessionId=' . $this->fetchNewSessionId() . '; _gat=1; _gat_UA-32673593-2=1; _ga=GA1.3.1718692550.1518710881; _gid=GA1.3.1779475860.1518710881'
         ], $jsonData);
 
-        $promise = $guzzleClient->sendAsync($request)->then(function ($response) {
-            return $response->getBody()->getContents();
-        });
-        $promise->wait();
+        $response = $this->client->send($request);
+        $requestResult = $response->getBody()->getContents();
 
-        var_dump($this->processResponse($promise));
-        return $this->processResponse($promise);
+        return $this->processResponse($requestResult);
     }
 
     /**
@@ -59,12 +74,10 @@ class EMTClient
      *
      * @return string
      */
-    protected function fetchNewSessionId()
+    protected function fetchNewSessionId() : string
     {
-        $client = new Client(['cookies' => true]);
-        $client->get(self::EMT_BASE_URL);
-
-        $cookies = $client->getConfig('cookies')->toArray();
+        $this->client->get(self::EMT_BASE_URL);
+        $cookies = $this->client->getConfig('cookies')->toArray();
 
         foreach ($cookies as $cookie) {
             if ($cookie['Name'] === "ASP.NET_SessionId") {
@@ -75,11 +88,39 @@ class EMTClient
         return self::DEFAULT_SESSION_ID;
     }
 
-    protected function processResponse($response)
+    /**
+     * Process the response from the API call.
+     *
+     * @param string $result
+     * @return array
+     */
+    protected function processResponse(string $result) : array
     {
-        $response = json_decode($response, true);
-        $encodedResponseData = json_encode($response['d']);
+        $result = json_decode($result, true);
+        $decodedResponse = json_decode($result['d'], true);
 
-        return json_decode($encodedResponseData, true);
+        return $this->formatAndValidateResponse($decodedResponse);
+    }
+
+    /**
+     * @param array $response
+     * @return array
+     * @throws \Exception
+     */
+    protected function formatAndValidateResponse(array $response) : array
+    {
+        if ($response['originnotfound']) {
+            throw new \Exception("The origin station was not found.");
+        } else if ($response['destnotfound']) {
+            throw new \Exception("The destination station was not found.");
+        }
+
+        foreach ($response as $paramKey => $responseParam) {
+            if (!$responseParam) {
+                unset($response[$paramKey]);
+            }
+        }
+
+        return $response;
     }
 }
