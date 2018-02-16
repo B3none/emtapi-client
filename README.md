@@ -3,7 +3,7 @@ East Midlands Trains API Client written in PHP.
 
 # Composer
 ```$xslt
-composer require b3none/emtapi-client
+composer require b3none/emtapi
 ```
 
 # Example use
