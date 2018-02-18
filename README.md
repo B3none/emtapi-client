@@ -51,5 +51,11 @@ $emtapi->getJourneys('Derby', 'Nottingham');
 
 ```
 
+# Testing
+To run all of the unit tests run
+```bash
+vendor/bin/phpunit tests
+```
+
 # Credits
 * Alex Blackham (ablackham2000@gmail.com)
