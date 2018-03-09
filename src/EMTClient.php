@@ -11,26 +11,21 @@ class EMTClient
     const EMT_API_ENDPOINT = "/services/LiveTrainInfoService.svc/GetLiveBoardJson";
 
     /**
-     * @var bool
-     */
-    protected $throwException;
-
-    /**
      * @var Client
      */
     protected $client;
 
-    public function __construct(bool $throwException = false)
+    public function __construct()
     {
-        $this->throwException = $throwException;
-        $this->client = new Client(['cookies' => true]);
+        $this->client = new Client();
     }
 
     /**
      * Get the live details on a journey.
      *
      * Please note:
-     * - You must make sure that the station names you input are correct.
+     * - You must make sure that the station names
+     *   you input are correct or the API will error.
      *
      * @param string $startLocation
      * @param string $endLocation
@@ -66,13 +61,23 @@ class EMTClient
      *
      * @param string $result
      * @return array
+     * @throws \Exception
      */
     protected function processResponse(string $result) : array
     {
         $result = json_decode($result, true);
+
+        if (!$result || empty($result)) {
+            return ['errorMessages' => ['#1' => 'There was no result to process.']];
+        }
+
         $decodedResponse = json_decode($result['d'], true);
 
-        return $this->formatAndValidateResponse($decodedResponse);
+        if (!$decodedResponse || empty($decodedResponse)) {
+            return ['errorMessages' => ['#1' => 'There was no result to process.']];
+        }
+
+        return $this->checkResponse($decodedResponse);
     }
 
     /**
@@ -80,32 +85,37 @@ class EMTClient
      * @return array
      * @throws \Exception
      */
-    protected function formatAndValidateResponse(array $response) : array
+    protected function checkResponse(array $response) : array
     {
-        if ($response['originnotfound']) {
-            if ($this->throwException) {
-                throw new \Exception('The origin station was not found.');
-            } else {
-                return ['errorMessage' => 'The origin station was not found.'];
+        $errors = [];
+        foreach ($response as $key => $value) {
+            if ($key === 'originnotfound'&& !!$value) {
+                $errors['#' . (count($errors) + 1)] = 'The origin station was not found.';
             }
-        } else if ($response['destnotfound']) {
-            if ($this->throwException) {
-                throw new \Exception('The destination station was not found.');
-            } else {
-                return ['errorMessage' => 'The destination station was not found.'];
+
+            if ($key === 'equalsstations'&& !!$value) {
+                $errors['#' . (count($errors) + 1)] = 'The stations were the same.';
             }
-        } else if (!$response['buses'] && !$response['trains']) {
-            if ($this->throwException) {
-                throw new \Exception('There are no trains or buses.');
-            } else {
-                return ['errorMessage' => 'There are no trains or buses.'];
+
+            if ($key === 'destnotfound' && !!$value) {
+                $errors['#' . (count($errors) + 1)] = 'The destination station was not found.';
+            }
+
+            if ($key === 'buses' && !$value) {
+                $errors['#' . (count($errors) + 1)] = 'There are no buses for this route.';
+            }
+
+            if ($key === 'trains' && !$value) {
+                $errors['#' . (count($errors) + 1)] = 'There are no trains for this route.';
+            }
+
+            if (!$value) {
+                unset($response[$key]);
             }
         }
 
-        foreach ($response as $paramKey => $responseParam) {
-            if (!$responseParam) {
-                unset($response[$paramKey]);
-            }
+        if (!empty($errors)) {
+            $response['errorMessages'] = $errors;
         }
 
         return $response;
