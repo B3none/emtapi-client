@@ -59,14 +59,9 @@ class EMTClient
            RequestOptions::HEADERS => [
                "Content-Type" => "application/json"
            ],
-           RequestOptions::FORM_PARAMS => $this->parameterFactory->create($startLocation, $endLocation, $departure)
+           RequestOptions::BODY => $this->parameterFactory->create($startLocation, $endLocation, $departure)
         ]);
 
-//        $request = new Request('POST', self::EMT_API_ENDPOINT, [
-//            'Content-Type' => 'application/json'
-//        ], $jsonData);
-//
-//        $response = $this->client->send($request);
         $requestResult = $response->getBody()->getContents();
 
         return $this->responseProcessor->processResponse($requestResult);
@@ -123,9 +118,9 @@ class EMTClient
         fwrite($stationFile, "{\n");
 
         $indentation = "    ";
-        $stations = $this->getStations();
-        foreach ($stations as $categories) {
-            foreach ($categories as $station) {
+        $categories = $this->getStations();
+        foreach ($categories as $category) {
+            foreach ($category as $station) {
                 $constructedLine = "const " . $this->getConstantName($station) . " = \"" . str_replace('"', '\\"', $station['label']) . "\";";
 
                 fwrite($stationFile, $indentation . $constructedLine . "\n");

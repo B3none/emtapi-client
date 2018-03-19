@@ -13,6 +13,7 @@ class EMTClientTest extends TestCase
         $client = EMTClient::create();
 
         $client->createStationsFile();
+        $client->getJourneys(Station::DERBY, Station::BURTON_ON_TRENT);
 
         $testData = [];
 //        $testData = $client->getJourneys('Derby', 'Burton-On-Trent');
