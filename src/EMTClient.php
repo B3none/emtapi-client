@@ -3,6 +3,7 @@
 namespace B3none\emtapi;
 
 use B3none\emtapi\Factories\ParameterFactory;
+use B3none\emtapi\Factories\StationConstantFactory;
 use B3none\emtapi\Processors\ResponseProcessor;
 use GuzzleHttp\Client;
 use GuzzleHttp\RequestOptions;
@@ -28,16 +29,30 @@ class EMTClient
      */
     protected $parameterFactory;
 
+    /**
+     * @var StationConstantFactory
+     */
+    protected $stationConstantFactory;
+
     public static function create()
     {
-        return new self(new Client(["base_uri" => self::EMT_BASE_URL]), new ResponseProcessor(), new ParameterFactory());
+        return new self(new Client(["base_uri" => self::EMT_BASE_URL]), new ResponseProcessor(), new ParameterFactory(), new StationConstantFactory());
     }
 
-    public function __construct(Client $client, ResponseProcessor $responseProcessor, ParameterFactory $parameterFactory)
+    /**
+     * EMTClient constructor.
+     *
+     * @param Client $client
+     * @param ResponseProcessor $responseProcessor
+     * @param ParameterFactory $parameterFactory
+     * @param StationConstantFactory $stationConstantFactory
+     */
+    public function __construct(Client $client, ResponseProcessor $responseProcessor, ParameterFactory $parameterFactory, StationConstantFactory $stationConstantFactory)
     {
         $this->client = $client;
         $this->responseProcessor = $responseProcessor;
         $this->parameterFactory = $parameterFactory;
+        $this->stationConstantFactory = $stationConstantFactory;
     }
 
     /**
@@ -45,7 +60,8 @@ class EMTClient
      *
      * Please note:
      * - You must make sure that the station names
-     *   you input are correct or the API will error.
+     *   you input are correct or the API will
+     *   error.
      *
      * @param string $startLocation
      * @param string $endLocation
@@ -67,7 +83,13 @@ class EMTClient
         return $this->responseProcessor->processResponse($requestResult);
     }
 
-    protected function getStations()
+    /**
+     * This function grabs a list of all train stations in their API.
+     *
+     * @return array
+     * @throws \Exception
+     */
+    protected function getStations() : array
     {
         $request = $this->client->request("GET", self::EMT_STATIONS);
 
@@ -88,22 +110,13 @@ class EMTClient
         return $contents;
     }
 
-    protected function getConstantName(array $station)
-    {
-        $label = $station['label'];
-
-        $label = strtoupper($label);
-        $label = str_replace(" ", "_", $label);
-        $label = str_replace(",", "_", $label);
-        $label = str_replace("-", "_", $label);
-        $label = str_replace("&", "AND", $label);
-        $label = str_replace("(", "", $label);
-        $label = str_replace(")", "", $label);
-        $label = str_replace("'", "", $label);
-
-        return $label;
-    }
-
+    /**
+     * This function will create a stations file to make querying the API
+     * via the emtapi client much easier.
+     *
+     * @return bool
+     * @throws \Exception
+     */
     public function createStationsFile()
     {
         if (file_exists('src/Station.php')) {
@@ -118,10 +131,11 @@ class EMTClient
         fwrite($stationFile, "{\n");
 
         $indentation = "    ";
+        fwrite($stationFile, $indentation . "// Created at: " . date('d/m/Y h:i A') . "\n");
         $categories = $this->getStations();
         foreach ($categories as $category) {
             foreach ($category as $station) {
-                $constructedLine = "const " . $this->getConstantName($station) . " = \"" . str_replace('"', '\\"', $station['label']) . "\";";
+                $constructedLine = "const " . $this->stationConstantFactory->create($station) . " = \"" . str_replace('"', '\\"', $station['label']) . "\";";
 
                 fwrite($stationFile, $indentation . $constructedLine . "\n");
             }

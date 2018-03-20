@@ -8,8 +8,9 @@ composer require b3none/emtapi
 
 # Example use
 ```php
-$emtapi = new \B3none\emtapi\EMTClient();
-$emtapi->getJourneys('Derby', 'Nottingham');
+$emtapi = \B3none\emtapi\EMTClient::create();
+$emtapi->createStationsFile();
+$emtapi->getJourneys(\B3none\emtapi\Station::DERBY, \B3none\emtapi\Station::NOTTINGHAM);
 ```
 
 # Example response
