@@ -93,18 +93,25 @@ class EMTClient
     {
         $request = $this->client->request("GET", self::EMT_STATIONS);
 
-        $body = trim($request->getBody()->getContents());
+        $body = $request->getBody()->getContents();
+
         if (!$body) {
             throw new \Exception('There was no body');
         }
 
-        $contents = json_decode($body, true);
+        $startPos = mb_strpos($body, "{");
+        $endPos = mb_strrpos($body, "}");
 
-        if (!$contents) {
-            $contents = json_decode(substr($body, 3), true);
-            if (!$contents) {
-                throw new \Exception('Could not parse JSON: ' . $body);
-            }
+        if ($startPos === false || $endPos === false) {
+            throw new \Exception("Could not detect the ". ($startPos === false ? "start":"end") ." of the JSON.");
+        }
+
+        $newBody = mb_substr($body, $startPos, ($endPos - $startPos) + 1);
+
+        $contents = json_decode($newBody, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new \Exception("Could not parse JSON: ".json_last_error_msg());
         }
 
         return $contents;
@@ -141,7 +148,7 @@ class EMTClient
             }
         }
 
-        fwrite($stationFile, "}\n");
+        fwrite($stationFile, "}");
 
         return fclose($stationFile);
     }
