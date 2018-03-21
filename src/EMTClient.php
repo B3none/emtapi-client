@@ -2,112 +2,154 @@
 
 namespace B3none\emtapi;
 
+use B3none\emtapi\Factories\ParameterFactory;
+use B3none\emtapi\Factories\StationConstantFactory;
+use B3none\emtapi\Processors\ResponseProcessor;
 use GuzzleHttp\Client;
-use GuzzleHttp\Psr7\Request;
+use GuzzleHttp\RequestOptions;
 
 class EMTClient
 {
     const EMT_BASE_URL = "https://www.eastmidlandstrains.co.uk";
-    const EMT_API_ENDPOINT = "/services/LiveTrainInfoService.svc/GetLiveBoardJson";
-
-    /**
-     * @var bool
-     */
-    protected $throwException;
+    const EMT_TIMES = "/services/LiveTrainInfoService.svc/GetLiveBoardJson";
+    const EMT_STATIONS = "/emt/handlers/NRESStationList.ashx?v=1.2&titlecase=True";
 
     /**
      * @var Client
      */
     protected $client;
 
-    public function __construct(bool $throwException = false)
+    /**
+     * @var ResponseProcessor
+     */
+    protected $responseProcessor;
+
+    /**
+     * @var ParameterFactory
+     */
+    protected $parameterFactory;
+
+    /**
+     * @var StationConstantFactory
+     */
+    protected $stationConstantFactory;
+
+    public static function create()
     {
-        $this->throwException = $throwException;
-        $this->client = new Client(['cookies' => true]);
+        return new self(new Client(["base_uri" => self::EMT_BASE_URL]), new ResponseProcessor(), new ParameterFactory(), new StationConstantFactory());
+    }
+
+    /**
+     * EMTClient constructor.
+     *
+     * @param Client $client
+     * @param ResponseProcessor $responseProcessor
+     * @param ParameterFactory $parameterFactory
+     * @param StationConstantFactory $stationConstantFactory
+     */
+    public function __construct(Client $client, ResponseProcessor $responseProcessor, ParameterFactory $parameterFactory, StationConstantFactory $stationConstantFactory)
+    {
+        $this->client = $client;
+        $this->responseProcessor = $responseProcessor;
+        $this->parameterFactory = $parameterFactory;
+        $this->stationConstantFactory = $stationConstantFactory;
     }
 
     /**
      * Get the live details on a journey.
      *
      * Please note:
-     * - You must make sure that the station names you input are correct.
+     * - You must make sure that the station names
+     *   you input are correct or the API will
+     *   error.
      *
      * @param string $startLocation
      * @param string $endLocation
+     * @param bool $departure
      * @return array
      * @throws \Exception
      */
-    public function getJourneys(string $startLocation, string $endLocation) : array
+    public function getJourneys(string $startLocation, string $endLocation, bool $departure = true) : array
     {
-        if ($startLocation == $endLocation) {
-            throw new \Exception("The start and end station must not be the same.");
-        }
-
-        $jsonData = json_encode([
-            'request' => [
-                'OriginText' => $startLocation,
-                'DestText' => $endLocation,
-                'Departures' => true
-            ],
+        $response = $this->client->request("POST", self::EMT_TIMES, [
+           RequestOptions::HEADERS => [
+               "Content-Type" => "application/json"
+           ],
+           RequestOptions::BODY => $this->parameterFactory->create($startLocation, $endLocation, $departure)
         ]);
 
-        $request = new Request('POST', self::EMT_BASE_URL . self::EMT_API_ENDPOINT, [
-            'Content-Type' => 'application/json'
-        ], $jsonData);
-
-        $response = $this->client->send($request);
         $requestResult = $response->getBody()->getContents();
 
-        return $this->processResponse($requestResult);
+        return $this->responseProcessor->processResponse($requestResult);
     }
 
     /**
-     * Process the response from the API call.
+     * This function grabs a list of all train stations in their API.
      *
-     * @param string $result
-     * @return array
-     */
-    protected function processResponse(string $result) : array
-    {
-        $result = json_decode($result, true);
-        $decodedResponse = json_decode($result['d'], true);
-
-        return $this->formatAndValidateResponse($decodedResponse);
-    }
-
-    /**
-     * @param array $response
      * @return array
      * @throws \Exception
      */
-    protected function formatAndValidateResponse(array $response) : array
+    protected function getStations() : array
     {
-        if ($response['originnotfound']) {
-            if ($this->throwException) {
-                throw new \Exception('The origin station was not found.');
-            } else {
-                return ['errorMessage' => 'The origin station was not found.'];
-            }
-        } else if ($response['destnotfound']) {
-            if ($this->throwException) {
-                throw new \Exception('The destination station was not found.');
-            } else {
-                return ['errorMessage' => 'The destination station was not found.'];
-            }
-        } else if (!$response['buses'] && !$response['trains']) {
-            if ($this->throwException) {
-                throw new \Exception('There are no trains or buses.');
-            } else {
-                return ['errorMessage' => 'There are no trains or buses.'];
+        $request = $this->client->request("GET", self::EMT_STATIONS);
+
+        $body = $request->getBody()->getContents();
+
+        if (!$body) {
+            throw new \Exception('There was no body');
+        }
+
+        $startPos = mb_strpos($body, "{");
+        $endPos = mb_strrpos($body, "}");
+
+        if ($startPos === false || $endPos === false) {
+            throw new \Exception("Could not detect the ". ($startPos === false ? "start":"end") ." of the JSON.");
+        }
+
+        $newBody = mb_substr($body, $startPos, ($endPos - $startPos) + 1);
+
+        $contents = json_decode($newBody, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new \Exception("Could not parse JSON: ".json_last_error_msg());
+        }
+
+        return $contents;
+    }
+
+    /**
+     * This function will create a stations file to make querying the API
+     * via the emtapi client much easier.
+     *
+     * @return bool
+     * @throws \Exception
+     */
+    public function createStationsFile()
+    {
+        if (file_exists('src/Station.php')) {
+            unlink('src/Station.php');
+        }
+
+        $stationFile = fopen('src/Station.php', "w");
+
+        fwrite($stationFile, "<?php\n\n");
+        fwrite($stationFile, "namespace B3none\\emtapi;\n\n");
+        fwrite($stationFile, "abstract class Station\n");
+        fwrite($stationFile, "{\n");
+
+        $indentation = "    ";
+        fwrite($stationFile, $indentation . "// Created at: " . date('d/m/Y h:i A') . "\n");
+        $categories = $this->getStations();
+        foreach ($categories as $category) {
+            foreach ($category as $station) {
+                $constructedLine = "const " . $this->stationConstantFactory->create($station) . " = \"" . str_replace('"', '\\"', $station['label']) . "\";";
+
+                fwrite($stationFile, $indentation . $constructedLine . "\n");
             }
         }
 
-        foreach ($response as $paramKey => $responseParam) {
-            if (!$responseParam) {
-                unset($response[$paramKey]);
-            }
-        }
+        fwrite($stationFile, "}");
 
-        return $response;
+        return fclose($stationFile);
     }
 }
