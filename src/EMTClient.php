@@ -29,14 +29,9 @@ class EMTClient
      */
     protected $parameterFactory;
 
-    /**
-     * @var StationConstantFactory
-     */
-    protected $stationConstantFactory;
-
     public static function create()
     {
-        return new self(new Client(["base_uri" => self::EMT_BASE_URL]), new ResponseProcessor(), new ParameterFactory(), new StationConstantFactory());
+        return new self(new Client(["base_uri" => self::EMT_BASE_URL]), new ResponseProcessor(), new ParameterFactory());
     }
 
     /**
@@ -45,14 +40,12 @@ class EMTClient
      * @param Client $client
      * @param ResponseProcessor $responseProcessor
      * @param ParameterFactory $parameterFactory
-     * @param StationConstantFactory $stationConstantFactory
      */
-    public function __construct(Client $client, ResponseProcessor $responseProcessor, ParameterFactory $parameterFactory, StationConstantFactory $stationConstantFactory)
+    public function __construct(Client $client, ResponseProcessor $responseProcessor, ParameterFactory $parameterFactory)
     {
         $this->client = $client;
         $this->responseProcessor = $responseProcessor;
         $this->parameterFactory = $parameterFactory;
-        $this->stationConstantFactory = $stationConstantFactory;
     }
 
     /**
@@ -89,7 +82,7 @@ class EMTClient
      * @return array
      * @throws \Exception
      */
-    protected function getStations() : array
+    public function getStations() : array
     {
         $request = $this->client->request("GET", self::EMT_STATIONS);
 
@@ -115,41 +108,5 @@ class EMTClient
         }
 
         return $contents;
-    }
-
-    /**
-     * This function will create a stations file to make querying the API
-     * via the emtapi client much easier.
-     *
-     * @return bool
-     * @throws \Exception
-     */
-    public function createStationsFile()
-    {
-        if (file_exists('src/Station.php')) {
-            unlink('src/Station.php');
-        }
-
-        $stationFile = fopen('src/Station.php', "w");
-
-        fwrite($stationFile, "<?php\n\n");
-        fwrite($stationFile, "namespace B3none\\emtapi;\n\n");
-        fwrite($stationFile, "abstract class Station\n");
-        fwrite($stationFile, "{\n");
-
-        $indentation = "    ";
-        fwrite($stationFile, $indentation . "// Created at: " . date('d/m/Y h:i A') . "\n");
-        $categories = $this->getStations();
-        foreach ($categories as $category) {
-            foreach ($category as $station) {
-                $constructedLine = "const " . $this->stationConstantFactory->create($station) . " = \"" . str_replace('"', '\\"', $station['label']) . "\";";
-
-                fwrite($stationFile, $indentation . $constructedLine . "\n");
-            }
-        }
-
-        fwrite($stationFile, "}");
-
-        return fclose($stationFile);
     }
 }

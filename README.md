@@ -9,8 +9,13 @@ composer require b3none/emtapi
 # Example use
 ```php
 $emtapi = \B3none\emtapi\EMTClient::create();
-$emtapi->createStationsFile();
 $emtapi->getJourneys(\B3none\emtapi\Station::DERBY, \B3none\emtapi\Station::NOTTINGHAM);
+```
+
+# To update the Station.php
+You will need to run the update.php file using the following command whilst you are in the project directory.
+```php
+php update.php
 ```
 
 # Example response
