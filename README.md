@@ -1,6 +1,9 @@
 # emtapi-client
 East Midlands Trains API Client written in PHP.
 
+# Author
+[B3none](https://b3none.co.uk/) - Developer / Maintainer
+
 # Composer
 ```$xslt
 composer require b3none/emtapi
@@ -57,6 +60,3 @@ To run all of the unit tests run
 ```bash
 vendor/bin/phpunit tests
 ```
-
-# Credits
-* Alex Blackham (ablackham2000@gmail.com)
